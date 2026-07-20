@@ -34,11 +34,33 @@ except Exception as e:
 
 nama_bunga = ["setosa", "versicolor", "virginica"]
 
+# Load model & scaler untuk segmentasi pelanggan (proyek clustering)
+try:
+    kmeans_model = joblib.load("kmeans_model.pkl")
+    scaler_mall = joblib.load("scaler_segmentasi.pkl")
+except Exception as e:
+    raise RuntimeError(
+        "Gagal load model/scaler segmentasi. Pastikan 'kmeans_model.pkl' dan "
+        "'scaler_segmentasi.pkl' ada di folder yang sama, dan sudah "
+        "dihasilkan dari segmentasi_pelanggan_mall.py. Detail error: " + str(e)
+    )
+
+# Deskripsi tiap cluster, berdasarkan analisis rata-rata karakteristik
+# masing-masing cluster (lihat segmentasi_pelanggan_mall.py). Urutan index
+# ini konsisten karena random_state di KMeans di-set tetap (42).
+deskripsi_cluster = {
+    0: "Usia lebih tua, income rendah, belanja rendah — hemat/prioritas kebutuhan pokok",
+    1: "Usia muda, income menengah, belanja tinggi — cenderung impulsif",
+    2: "Usia muda, income tinggi, belanja tinggi — pelanggan premium/target utama",
+    3: "Income tinggi, belanja rendah — selektif, perlu strategi menarik minat belanja",
+    4: "Usia lebih tua, income & belanja menengah — pelanggan standar"
+}
+
 # 2. Buat Aplikasi FastAPI
 app = FastAPI(
-    title="API Klasifikasi Bunga Iris",
-    description="Prediksi jenis bunga iris berdasarkan ukuran kelopak & mahkota",
-    version="1.0.0"
+    title="API Data Science Portofolio",
+    description="Prediksi jenis bunga iris & segmentasi pelanggan mall",
+    version="1.1.0"
 )
 
 # Izinkan frontend (file HTML atau domain lain) memanggil API ini.
@@ -73,11 +95,26 @@ class DataBunga(BaseModel):
         }
 
 
+class DataPelanggan(BaseModel):
+    usia: int = Field(..., gt=0, le=120, description="Usia pelanggan")
+    pendapatan_tahunan: float = Field(..., gt=0, description="Pendapatan tahunan (dalam k$)")
+    spending_score: float = Field(..., ge=0, le=100, description="Spending score (1-100)")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "usia": 32,
+                "pendapatan_tahunan": 86,
+                "spending_score": 82
+            }
+        }
+
+
 # 4. Endpoint Utama
 @app.get("/")
 def beranda():
     """Endpoint dasar untuk cek apakah API hidup."""
-    return {"pesan": "API Klasifikasi Iris aktif. Buka /docs untuk mencoba."}
+    return {"pesan": "API Data Science Portofolio aktif. Buka /docs untuk mencoba endpoint /predict (iris) dan /predict_segmen (segmentasi pelanggan)."}
 
 
 @app.post("/predict")
@@ -112,4 +149,31 @@ def prediksi_bunga(data: DataBunga):
         }
     except Exception as e:
         # Kembalikan error yang jelas ke pengguna API, bukan cuma crash diam-diam
+        raise HTTPException(status_code=400, detail=f"Gagal memproses input: {str(e)}")
+
+
+@app.post("/predict_segmen")
+def prediksi_segmen(data: DataPelanggan):
+    """
+    Terima data pelanggan (usia, pendapatan, spending score), kembalikan
+    cluster/segmen yang paling sesuai berdasarkan model KMeans yang sudah
+    dilatih dari data Mall_Customers.csv.
+    """
+    try:
+        fitur_pelanggan = np.array([[
+            data.usia,
+            data.pendapatan_tahunan,
+            data.spending_score
+        ]])
+
+        # WAJIB pakai scaler yang sama dengan waktu training KMeans
+        fitur_scaled = scaler_mall.transform(fitur_pelanggan)
+
+        cluster = int(kmeans_model.predict(fitur_scaled)[0])
+
+        return {
+            "cluster": cluster,
+            "deskripsi_segmen": deskripsi_cluster.get(cluster, "Deskripsi tidak tersedia")
+        }
+    except Exception as e:
         raise HTTPException(status_code=400, detail=f"Gagal memproses input: {str(e)}")
