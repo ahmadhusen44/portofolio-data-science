@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Segmentasi Pelanggan Mall</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600&display=swap');
+
+  :root {
+    --sage: #5b6d5b;
+    --sage-dark: #3c4a3c;
+    --cream: #f6f3ec;
+    --iris-purple: #6b5b95;
+    --line: #ddd6c7;
+    --ink: #2b2b26;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--cream);
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 16px;
+  }
+
+  .card {
+    background: white;
+    max-width: 520px;
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 40px 36px;
+    position: relative;
+  }
+
+  nav {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 12px;
+  }
+
+  nav a {
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    color: #9a988e;
+    padding: 6px 12px;
+    border-radius: 3px;
+  }
+
+  nav a.active {
+    color: white;
+    background: var(--sage-dark);
+  }
+
+  .eyebrow {
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--sage);
+    font-weight: 600;
+    margin: 0 0 8px;
+  }
+
+  h1 {
+    font-family: 'Fraunces', serif;
+    font-size: 32px;
+    font-weight: 600;
+    margin: 0 0 6px;
+    color: var(--sage-dark);
+  }
+
+  .subtitle {
+    font-size: 14px;
+    color: #6b6a63;
+    margin: 0 0 28px;
+    line-height: 1.5;
+  }
+
+  .field {
+    margin-bottom: 16px;
+  }
+
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 5px;
+    color: var(--ink);
+  }
+
+  input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    font-size: 14px;
+    font-family: 'Inter', sans-serif;
+  }
+
+  input:focus {
+    outline: 2px solid var(--sage);
+    outline-offset: 1px;
+  }
+
+  button {
+    width: 100%;
+    margin-top: 8px;
+    background: var(--sage-dark);
+    color: white;
+    border: none;
+    padding: 13px;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+  }
+
+  button:hover { background: var(--sage); }
+  button:disabled { opacity: 0.6; cursor: default; }
+
+  .result {
+    margin-top: 24px;
+    padding: 20px;
+    border-radius: 3px;
+    background: var(--cream);
+    border: 1px solid var(--line);
+    display: none;
+  }
+
+  .result.show { display: block; }
+
+  .result-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--sage);
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .result-cluster {
+    font-family: 'Fraunces', serif;
+    font-size: 26px;
+    color: var(--iris-purple);
+    margin: 0 0 8px;
+  }
+
+  .result-desc {
+    font-size: 14px;
+    color: var(--ink);
+    line-height: 1.5;
+  }
+
+  .error {
+    margin-top: 20px;
+    padding: 14px 16px;
+    background: #fdf1f0;
+    border: 1px solid #e8b8b4;
+    color: #a13a34;
+    border-radius: 3px;
+    font-size: 13px;
+    display: none;
+  }
+
+  .error.show { display: block; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <nav>
+    <a href="index.html">Klasifikasi Iris</a>
+    <a href="segmentasi.html" class="active">Segmentasi Pelanggan</a>
+  </nav>
+
+  <p class="eyebrow">Unsupervised Learning</p>
+  <h1>Segmentasi Pelanggan Mall</h1>
+  <p class="subtitle">Masukkan data pelanggan, model K-Means akan menentukan segmen mana yang paling sesuai berdasarkan pola dari 200 data pelanggan mall.</p>
+
+  <form id="form-segmen">
+    <div class="field">
+      <label for="usia">Usia</label>
+      <input type="number" id="usia" value="32" required>
+    </div>
+    <div class="field">
+      <label for="income">Pendapatan tahunan (dalam k$, misal 86 = $86,000)</label>
+      <input type="number" step="0.1" id="income" value="86" required>
+    </div>
+    <div class="field">
+      <label for="spending">Spending score (0-100)</label>
+      <input type="number" step="0.1" id="spending" value="82" min="0" max="100" required>
+    </div>
+    <button type="submit" id="btn-submit">Prediksi segmen</button>
+  </form>
+
+  <div class="error" id="box-error"></div>
+
+  <div class="result" id="box-hasil">
+    <p class="result-label">Segmen terdeteksi — Cluster <span id="hasil-cluster-nomor">-</span></p>
+    <p class="result-cluster" id="hasil-cluster">-</p>
+    <p class="result-desc" id="hasil-deskripsi">-</p>
+  </div>
+</div>
+
+<script>
+  const API_URL = "https://portofolio-data-science-production.up.railway.app/predict_segmen";
+
+  const form = document.getElementById('form-segmen');
+  const btn = document.getElementById('btn-submit');
+  const boxHasil = document.getElementById('box-hasil');
+  const boxError = document.getElementById('box-error');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    boxError.classList.remove('show');
+    boxHasil.classList.remove('show');
+    btn.disabled = true;
+    btn.textContent = "Memprediksi...";
+
+    const payload = {
+      usia: parseInt(document.getElementById('usia').value),
+      pendapatan_tahunan: parseFloat(document.getElementById('income').value),
+      spending_score: parseFloat(document.getElementById('spending').value),
+    };
+
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.detail || `Server merespons dengan status ${res.status}`);
+      }
+
+      const data = await res.json();
+      document.getElementById('hasil-cluster-nomor').textContent = data.cluster;
+      document.getElementById('hasil-cluster').textContent = `Cluster ${data.cluster}`;
+      document.getElementById('hasil-deskripsi').textContent = data.deskripsi_segmen;
+
+      boxHasil.classList.add('show');
+    } catch (err) {
+      boxError.textContent = "Gagal terhubung ke API: " + err.message;
+      boxError.classList.add('show');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Prediksi segmen";
+    }
+  });
+</script>
+
+</body>
+</html>

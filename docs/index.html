@@ -195,6 +195,10 @@
 <body>
 
 <div class="card">
+  <nav style="display:flex; gap:4px; margin-bottom:24px; border-bottom:1px solid var(--line); padding-bottom:12px;">
+    <a href="index.html" style="font-size:13px; font-weight:500; text-decoration:none; padding:6px 12px; border-radius:3px; color:white; background:var(--sage-dark);">Klasifikasi Iris</a>
+    <a href="segmentasi.html" style="font-size:13px; font-weight:500; text-decoration:none; padding:6px 12px; border-radius:3px; color:#9a988e;">Segmentasi Pelanggan</a>
+  </nav>
   <p class="eyebrow">Machine Learning</p>
   <h1>Klasifikasi Bunga Iris</h1>
   <p class="subtitle">Masukkan ukuran kelopak dan mahkota bunga (dalam cm), model akan memprediksi jenis iris-nya.</p>
@@ -230,7 +234,6 @@
     <div class="bars" id="hasil-bars"></div>
   </div>
 
-  <p class="api-note">Terhubung ke API di <code>http://127.0.0.1:8000</code></p>
 </div>
 
 <script>
@@ -287,7 +290,7 @@
       boxHasil.classList.add('show');
     } catch (err) {
       boxError.textContent = "Gagal terhubung ke API: " + err.message +
-        ". Pastikan server uvicorn sedang berjalan di 127.0.0.1:8000.";
+        ". Coba muat ulang halaman beberapa saat lagi (server API mungkin sedang \"bangun\" dari mode tidur).";
       boxError.classList.add('show');
     } finally {
       btn.disabled = false;
