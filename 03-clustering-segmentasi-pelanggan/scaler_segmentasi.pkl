@@ -1,0 +1,179 @@
+"""
+API sederhana untuk deploy model klasifikasi bunga Iris.
+
+CARA MENJALANKAN:
+1. Pastikan file 'model_iris.keras' dan 'scaler_iris.pkl' ada di folder yang
+   sama dengan file ini. Kedua file itu dihasilkan dari script
+   klasifikasi_iris.py yang sudah kamu buat sebelumnya (jalankan dulu script
+   itu kalau belum pernah, supaya file model & scaler-nya ter-generate).
+2. Install dependency (kalau belum): pip install fastapi uvicorn tensorflow joblib
+3. Jalankan API dengan perintah:  uvicorn main:app --reload
+4. Buka browser ke http://127.0.0.1:8000/docs untuk mencoba API secara
+   interaktif (FastAPI otomatis membuatkan dokumentasi ini, tidak perlu
+   dibuat manual).
+"""
+
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+import numpy as np
+import joblib
+import tensorflow as tf
+
+# 1. Load Model & Scaler (dilakukan SEKALI saat API pertama kali dijalankan,
+# bukan setiap kali ada request masuk -- supaya API cepat merespons)
+try:
+    model = tf.keras.models.load_model("model_iris.keras")
+    scaler = joblib.load("scaler_iris.pkl")
+except Exception as e:
+    raise RuntimeError(
+        "Gagal load model/scaler. Pastikan 'model_iris.keras' dan "
+        "'scaler_iris.pkl' ada di folder yang sama dengan file ini, dan "
+        "sudah dihasilkan dari klasifikasi_iris.py. Detail error: " + str(e)
+    )
+
+nama_bunga = ["setosa", "versicolor", "virginica"]
+
+# Load model & scaler untuk segmentasi pelanggan (proyek clustering)
+try:
+    kmeans_model = joblib.load("kmeans_model.pkl")
+    scaler_mall = joblib.load("scaler_segmentasi.pkl")
+except Exception as e:
+    raise RuntimeError(
+        "Gagal load model/scaler segmentasi. Pastikan 'kmeans_model.pkl' dan "
+        "'scaler_segmentasi.pkl' ada di folder yang sama, dan sudah "
+        "dihasilkan dari segmentasi_pelanggan_mall.py. Detail error: " + str(e)
+    )
+
+# Deskripsi tiap cluster, berdasarkan analisis rata-rata karakteristik
+# masing-masing cluster (lihat segmentasi_pelanggan_mall.py). Urutan index
+# ini konsisten karena random_state di KMeans di-set tetap (42).
+deskripsi_cluster = {
+    0: "Usia lebih tua, income rendah, belanja rendah — hemat/prioritas kebutuhan pokok",
+    1: "Usia muda, income menengah, belanja tinggi — cenderung impulsif",
+    2: "Usia muda, income tinggi, belanja tinggi — pelanggan premium/target utama",
+    3: "Income tinggi, belanja rendah — selektif, perlu strategi menarik minat belanja",
+    4: "Usia lebih tua, income & belanja menengah — pelanggan standar"
+}
+
+# 2. Buat Aplikasi FastAPI
+app = FastAPI(
+    title="API Data Science Portofolio",
+    description="Prediksi jenis bunga iris & segmentasi pelanggan mall",
+    version="1.1.0"
+)
+
+# Izinkan frontend (file HTML atau domain lain) memanggil API ini.
+# Untuk portofolio/belajar, "*" (semua origin) cukup aman. Kalau nanti API ini
+# dipakai untuk aplikasi produksi sungguhan, sebaiknya ganti "*" dengan domain
+# frontend yang spesifik demi keamanan.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# 3. Skema Input
+# Pydantic otomatis memvalidasi tipe data & memberi pesan error yang jelas
+# kalau user mengirim data yang salah format (misal teks bukan angka).
+class DataBunga(BaseModel):
+    panjang_kelopak: float = Field(..., gt=0, description="Panjang sepal (cm)")
+    lebar_kelopak: float = Field(..., gt=0, description="Lebar sepal (cm)")
+    panjang_mahkota: float = Field(..., gt=0, description="Panjang petal (cm)")
+    lebar_mahkota: float = Field(..., gt=0, description="Lebar petal (cm)")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "panjang_kelopak": 5.1,
+                "lebar_kelopak": 3.5,
+                "panjang_mahkota": 1.4,
+                "lebar_mahkota": 0.2
+            }
+        }
+
+
+class DataPelanggan(BaseModel):
+    usia: int = Field(..., gt=0, le=120, description="Usia pelanggan")
+    pendapatan_tahunan: float = Field(..., gt=0, description="Pendapatan tahunan (dalam k$)")
+    spending_score: float = Field(..., ge=0, le=100, description="Spending score (1-100)")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "usia": 32,
+                "pendapatan_tahunan": 86,
+                "spending_score": 82
+            }
+        }
+
+
+# 4. Endpoint Utama
+@app.get("/")
+def beranda():
+    """Endpoint dasar untuk cek apakah API hidup."""
+    return {"pesan": "API Data Science Portofolio aktif. Buka /docs untuk mencoba endpoint /predict (iris) dan /predict_segmen (segmentasi pelanggan)."}
+
+
+@app.post("/predict")
+def prediksi_bunga(data: DataBunga):
+    """
+    Terima 4 ukuran bunga, kembalikan prediksi jenis bunga & tingkat keyakinan.
+    """
+    try:
+        # Susun input jadi format array 2D, sesuai yang diharapkan model
+        ukuran = np.array([[
+            data.panjang_kelopak,
+            data.lebar_kelopak,
+            data.panjang_mahkota,
+            data.lebar_mahkota
+        ]])
+
+        # WAJIB pakai scaler yang SAMA dengan waktu training, bukan scaler baru
+        ukuran_scaled = scaler.transform(ukuran)
+
+        prediksi = model.predict(ukuran_scaled, verbose=0)
+        indeks_prediksi = int(np.argmax(prediksi))
+        jenis = nama_bunga[indeks_prediksi]
+        keyakinan = float(np.max(prediksi))
+
+        return {
+            "jenis_bunga": jenis,
+            "tingkat_keyakinan": round(keyakinan * 100, 2),
+            "detail_probabilitas": {
+                nama_bunga[i]: round(float(prediksi[0][i]) * 100, 2)
+                for i in range(len(nama_bunga))
+            }
+        }
+    except Exception as e:
+        # Kembalikan error yang jelas ke pengguna API, bukan cuma crash diam-diam
+        raise HTTPException(status_code=400, detail=f"Gagal memproses input: {str(e)}")
+
+
+@app.post("/predict_segmen")
+def prediksi_segmen(data: DataPelanggan):
+    """
+    Terima data pelanggan (usia, pendapatan, spending score), kembalikan
+    cluster/segmen yang paling sesuai berdasarkan model KMeans yang sudah
+    dilatih dari data Mall_Customers.csv.
+    """
+    try:
+        fitur_pelanggan = np.array([[
+            data.usia,
+            data.pendapatan_tahunan,
+            data.spending_score
+        ]])
+
+        # WAJIB pakai scaler yang sama dengan waktu training KMeans
+        fitur_scaled = scaler_mall.transform(fitur_pelanggan)
+
+        cluster = int(kmeans_model.predict(fitur_scaled)[0])
+
+        return {
+            "cluster": cluster,
+            "deskripsi_segmen": deskripsi_cluster.get(cluster, "Deskripsi tidak tersedia")
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Gagal memproses input: {str(e)}")
